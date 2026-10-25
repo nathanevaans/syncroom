@@ -1,0 +1,262 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>SyncRoom</title>
+<style>
+:root{--bg:#0f1115;--card:#171a21;--card2:#1d2129;--fg:#e8eaf0;--mute:#8a90a0;--acc:#1db954;--warn:#e0a83a;--bad:#ef5b5b;--line:#272b35}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:22px;margin:0}h2{font-size:16px;margin:0 0 8px}h3{font-size:13px;margin:14px 0 6px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+.sub{color:var(--mute);font-size:14px}.mute{color:var(--mute)}.small{font-size:13px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+button{background:var(--card2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer;white-space:nowrap}
+button:hover:not(:disabled){border-color:#3a404d}button:disabled{opacity:.45;cursor:default}
+button.p{background:var(--acc);color:#04130a;border-color:var(--acc);font-weight:600}
+button.bad{border-color:var(--bad);color:var(--bad);background:transparent}
+button.sm{padding:4px 9px;font-size:13px}button.link{background:none;border:none;color:var(--acc);padding:0;font-size:13px}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line);margin-bottom:14px}
+.bar .grow{flex:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}
+.card.sel{border-color:#2f6b45}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.who{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.who input{width:18px;height:18px;margin-top:3px;accent-color:var(--acc)}
+.name{font-weight:600;font-size:16px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 10px;border-radius:999px;border:1px solid var(--line)}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--mute)}
+.pill.ok i{background:var(--acc)}.pill.ok{color:#9be3b5}
+.pill.bad i{background:var(--bad)}.pill.bad{color:#ffb0b0;border-color:#5a2a2a}
+.warn{color:var(--warn);font-size:13px;margin-top:6px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+@media (max-width:620px){.grid{grid-template-columns:1fr}}
+.m{background:var(--card2);border-radius:10px;padding:10px 12px}
+.m .k{color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.m .v{font-size:22px;font-variant-numeric:tabular-nums;font-weight:600}
+.m .s{color:var(--mute);font-size:12.5px;min-height:1.2em}
+.m.edit{outline:1px solid #2f6b45}
+.est{color:var(--warn)}
+.delay{display:flex;align-items:baseline;gap:4px}
+.delay input{width:100%;max-width:130px;font:600 22px system-ui,sans-serif;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:2px 8px}
+.nudge{display:flex;gap:4px;flex-wrap:wrap}
+.foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.vol{display:flex;gap:8px;align-items:center}.vol input{width:150px;accent-color:var(--acc)}
+#calp{border-color:var(--warn);background:#1e1a10}
+#calp.done{border-color:var(--line);background:var(--card)}
+.prog{height:6px;background:#2c2717;border-radius:4px;overflow:hidden;margin:10px 0}
+.prog b{display:block;height:100%;width:0;background:var(--warn);transition:width .4s linear}
+.res{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.logbox{font:12px/1.5 ui-monospace,Menlo,monospace;background:#0a0c10;border:1px solid var(--line);border-radius:8px;padding:8px 10px;max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin-top:10px}
+select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font:inherit;max-width:100%}
+.off{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.off:first-of-type{border-top:none}
+dialog{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:0;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.dlg{padding:18px}.dlg .row+.row{margin-top:8px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#3a1717;border:1px solid var(--bad);color:#ffd0d0;padding:10px 14px;border-radius:10px;display:none;z-index:20;max-width:calc(100vw - 32px)}
+details summary{cursor:pointer;color:var(--mute);font-size:13px}
+</style></head><body><main>
+<div class="head"><div><h1>SyncRoom</h1>
+<div class="sub" id="sum">connecting…</div></div>
+<button onclick="openSetup()">Speakers &amp; mic</button></div>
+
+<div class="bar">
+ <span class="small mute" id="selc">0 selected</span>
+ <button class="sm" onclick="selAll(true)">All</button><button class="sm" onclick="selAll(false)">None</button>
+ <span class="grow"></span>
+ <button id="bBeep" onclick="beep()">Test beep</button>
+ <button class="p" id="bCal" onclick="calibrate()">Calibrate</button>
+</div>
+
+<div class="card" id="calp" hidden>
+ <div class="row"><h2 id="calT">Calibrating</h2><span>
+  <button class="sm bad" id="calX" onclick="api('/api/calibrate/cancel')">Cancel</button>
+  <button class="sm" id="calD" onclick="calDismissed=S.cal.finished;render(S)" hidden>Close</button></span></div>
+ <div id="calPh"></div><div class="small mute" id="calDe"></div>
+ <div class="prog"><b id="calBar"></b></div>
+ <div class="res" id="calR"></div>
+ <div class="logbox" id="calLog"></div>
+</div>
+
+<div id="cards"></div>
+<div class="card" id="offc" hidden><h2>Switched off</h2><div id="offl"></div></div>
+<p class="small mute">Calibration measures each speaker's latency at the microphone, then suggests an added delay so
+every speaker lines up with the slowest one. Fine-tune by ear: if a speaker sounds <b>early</b>, add delay; <b>late</b>, take some away.
+Test-beep a group to compare them — you should hear one click per beat, not a flam.</p>
+<details><summary>Activity log</summary><div class="logbox" id="log"></div></details>
+</main>
+
+<dialog id="setup"><div class="dlg">
+ <div class="row"><h2>Speakers &amp; microphone</h2><button class="sm" onclick="setupD.close()">Done</button></div>
+ <h3>Calibration microphone</h3>
+ <div class="row"><select id="micSel" onchange="api('/api/mic',{device:this.value||null})"></select></div>
+ <h3>Music input</h3>
+ <div class="row"><select id="capSel" onchange="setCap(this.value)"></select></div>
+ <div class="small mute" id="capNote"></div>
+ <h3>Your speakers</h3><div id="mine"></div>
+ <h3>Add speakers</h3>
+ <div class="row"><button onclick="scan()" id="scanB">Scan for speakers</button><span class="small mute" id="scanN">Finds Sonos and Google Home on the network, and audio devices on this Mac (Bluetooth).</span></div>
+ <div id="found"></div>
+</div></dialog>
+<div id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id), setupD=$('setup');
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const kind=o=>esc(TYPE[o.type]||o.type)+(o.where?' · '+esc(o.where):'');
+const TYPE={sonos:'Sonos',chromecast:'Google Home',local:'Bluetooth / this Mac',http:'Stream',pulse:'Pulse'};
+let S=null, sel=new Set(), calDismissed=null, logSeq=0, fetchedAt=0, timer=null;
+try{sel=new Set(JSON.parse(localStorage.getItem('sel')||'[]'))}catch(e){}
+function saveSel(){try{localStorage.setItem('sel',JSON.stringify([...sel]))}catch(e){}}
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',5000)}
+async function api(path,body){
+ try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+  const j=await r.json(); if(!r.ok){toast(j.error||('error '+r.status));return null}
+  render(j); return j}catch(e){toast('SyncRoom is not responding')}}
+const on=()=>S?S.speakers.filter(o=>o.enabled):[];
+function chosen(){return on().map(o=>o.name).filter(n=>sel.has(n))}
+function selAll(v){on().forEach(o=>v?sel.add(o.name):sel.delete(o.name));saveSel();render(S)}
+function beep(){const n=chosen();api('/api/synctest',{names:n.length?n:null})}
+function calibrate(){const n=chosen();calDismissed=null;api('/api/calibrate',{names:n.length?n:null})}
+function ms(v){return v==null?'—':Math.round(v).toLocaleString()+' ms'}
+function when(t){if(!t)return'';const d=new Date(t*1000),now=new Date();
+ const hm=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+ return d.toDateString()===now.toDateString()?'today '+hm:d.toLocaleDateString([],{day:'numeric',month:'short'})+' '+hm}
+
+function card(o){const n=esc(o.name);return `<div class="card" data-n="${n}">
+ <div class="row"><label class="who"><input type="checkbox" data-f="chk">
+  <div><div class="name">${n}</div><div class="small mute">${kind(o)}</div></div></label>
+  <span class="row"><span class="pill" data-f="pill"><i></i><span></span></span>
+  <button class="sm" data-f="recon">Reconnect</button></span></div>
+ <div class="warn" data-f="warn" hidden></div>
+ <div class="grid">
+  <div class="m"><div class="k">Measured latency</div><div class="v" data-f="lat"></div><div class="s" data-f="latS"></div></div>
+  <div class="m"><div class="k">Suggested delay</div><div class="v" data-f="sug"></div><div class="s" data-f="sugS"></div></div>
+  <div class="m edit"><div class="k">Added delay (live)</div>
+   <div class="delay"><input type="number" min="0" max="40000" step="1" data-f="dly"><span class="mute">ms</span></div>
+   <div class="s" data-f="dlyS"></div></div>
+ </div>
+ <div class="foot"><div class="nudge" data-f="nudge">
+   ${[-50,-10,-1,1,10,50].map(d=>`<button class="sm" data-d="${d}">${d>0?'+':'−'}${Math.abs(d)}</button>`).join('')}
+   <button class="sm" data-f="reset">Use suggested</button></div>
+  <div class="vol"><span class="small mute">Volume</span><input type="range" min="0" max="2" step="0.05" data-f="gain"><span class="small mute" data-f="gainV"></span></div></div>
+ <div class="foot" style="margin-top:10px"><span class="small mute" data-f="stat"></span>
+  <span class="nudge"><button class="sm" data-f="beep1">Beep</button><button class="sm" data-f="cal1">Calibrate</button>
+  <button class="sm" data-f="off1">Turn off</button></span></div>
+</div>`}
+
+function wire(el,name){
+ const f=k=>el.querySelector(`[data-f="${k}"]`), body=x=>Object.assign({name},x);
+ f('chk').onchange=e=>{e.target.checked?sel.add(name):sel.delete(name);saveSel();render(S)};
+ f('recon').onclick=()=>api('/api/restart',body());
+ const d=f('dly');
+ d.oninput=()=>d.dataset.dirty=1;
+ const commit=()=>{if(!d.dataset.dirty||d.value==='')return;delete d.dataset.dirty;api('/api/delay',body({ms:+d.value}))};
+ d.onkeydown=e=>{if(e.key==='Enter'){commit();d.blur()}if(e.key==='Escape'){delete d.dataset.dirty;d.blur();render(S)}};
+ d.onblur=commit;
+ el.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>api('/api/trim',body({ms:+b.dataset.d})));
+ f('reset').onclick=()=>api('/api/delay',body({ms:'suggested'}));
+ const g=f('gain');g.oninput=()=>f('gainV').textContent=Math.round(g.value*100)+'%';
+ g.onchange=()=>api('/api/gain',body({v:+g.value}));
+ f('beep1').onclick=()=>api('/api/synctest',{names:[name]});
+ f('cal1').onclick=()=>{calDismissed=null;api('/api/calibrate',{names:[name]})};
+ f('off1').onclick=()=>api('/api/speaker/enable',body({on:false}));
+}
+
+function update(el,o,s){
+ const f=k=>el.querySelector(`[data-f="${k}"]`), busy=s.calibrating, isSel=sel.has(o.name);
+ el.classList.toggle('sel',isSel); f('chk').checked=isSel;
+ const p=f('pill');p.className='pill '+(o.connected?'ok':'bad');
+ const why=/^(error|not found|waiting|restarting)/.test(o.status||'')?' · '+o.status:'';
+ p.lastChild.textContent=o.connected?(o.sending?'Connected · playing':'Connected'):(o.paused?'Released':'Disconnected'+why);
+ const r=f('recon');r.className='sm'+(o.connected?'':' p');r.disabled=busy;
+ const w=[];
+ if(o.stale)w.push('Reconnected since it was measured — its latency may have changed. Recalibrate it.');
+ if(o.last_cal&&!o.last_cal.ok)w.push(`Last calibration didn't hear it clearly (snr ${o.last_cal.snr}). Move the mic closer or turn it up.`);
+ f('warn').hidden=!w.length;f('warn').textContent=w.join(' ');
+ f('lat').textContent=ms(o.latency_ms);f('lat').className='v'+(o.measured?'':' est');
+ f('latS').textContent=o.measured?(o.measured_at?'measured '+when(o.measured_at):'set by hand')+(o.last_cal&&o.last_cal.ok?' · snr '+o.last_cal.snr:''):'not measured yet — a guess';
+ f('sug').textContent=ms(o.suggested_ms);
+ f('sugS').textContent=s.slowest===o.name?'slowest speaker — others wait for it':'to line up with '+(s.slowest||'—');
+ const d=f('dly');if(document.activeElement!==d&&!d.dataset.dirty)d.value=o.delay_ms;d.disabled=busy;
+ const t=Math.round(o.delay_ms-o.suggested_ms);
+ f('dlyS').textContent=t===0?'= suggested':(t>0?'+':'−')+Math.abs(t)+' ms fine-tuned from suggested';
+ f('nudge').querySelectorAll('button').forEach(b=>b.disabled=busy);f('reset').hidden=t===0;
+ const g=f('gain');if(document.activeElement!==g){g.value=o.gain;f('gainV').textContent=Math.round(o.gain*100)+'%'}
+ f('stat').textContent=o.clients?o.clients+' stream connection'+(o.clients>1?'s':''):'';
+ f('beep1').disabled=busy||!o.connected;f('cal1').disabled=busy||!o.connected;f('off1').disabled=busy;
+}
+
+function render(s){if(!s)return;S=s;fetchedAt=Date.now();
+ const en=on();for(const n of [...sel])if(!en.some(o=>o.name===n))sel.delete(n);
+ const nc=en.filter(o=>!o.connected).length;
+ $('sum').textContent=en.length?`${en.length} speaker${en.length>1?'s':''} · everything plays ${ms(s.global_delay_ms)} behind live`+
+  (s.slowest?` (waiting for ${s.slowest})`:'')+(nc?` · ${nc} disconnected`:'')+(s.muted?' · music muted':''):'No speakers yet — open “Speakers & mic” to add some.';
+ const c=chosen().length;
+ $('selc').textContent=c?`${c} selected`:'none selected = all';
+ $('bBeep').textContent=c?`Test beep ${c}`:'Test beep all';$('bCal').textContent=c?`Calibrate ${c}`:'Calibrate all';
+ $('bBeep').disabled=$('bCal').disabled=s.calibrating||!en.length;
+ // cards: rebuild only when the set of speakers changes, otherwise update in place
+ const L=$('cards'),key=en.map(o=>o.name).join('\n');
+ if(L.dataset.key!==key){L.innerHTML=en.map(card).join('');L.dataset.key=key;
+  L.querySelectorAll('.card').forEach(el=>wire(el,el.dataset.n))}
+ L.querySelectorAll('.card').forEach(el=>update(el,en.find(o=>o.name===el.dataset.n),s));
+ const off=s.speakers.filter(o=>!o.enabled);$('offc').hidden=!off.length;
+ $('offl').innerHTML=off.map(o=>`<div class="off"><span><b>${esc(o.name)}</b> <span class="small mute">${kind(o)}</span></span>
+  <span><button class="sm p" ${s.calibrating?'disabled':''} onclick='api("/api/speaker/enable",{name:${JSON.stringify(o.name)},on:true})'>Turn on</button></span></div>`).join('');
+ renderCal(s);
+ if(setupD.open)renderMine();
+}
+
+function renderCal(s){const c=s.cal||{},P=$('calp');
+ const show=c.started&&(c.active||(c.finished&&c.finished!==calDismissed));P.hidden=!show;if(!show)return;
+ P.classList.toggle('done',!c.active);
+ $('calT').textContent=c.active?(c.speaker?`Calibrating ${c.i} of ${c.n} · ${c.speaker}`:'Calibrating'):(c.error?'Calibration failed':'Calibration finished');
+ $('calPh').textContent=c.phase?c.phase[0].toUpperCase()+c.phase.slice(1):'';
+ const rem=c.remaining_s!=null?Math.max(0,c.remaining_s-(Date.now()-fetchedAt)/1000):null;
+ $('calDe').textContent=[c.detail,rem!=null&&c.active?Math.ceil(rem)+' s left':''].filter(Boolean).join(' · ');
+ $('calBar').style.width=(!c.active?100:rem!=null&&c.phase_secs?100*(1-rem/c.phase_secs):0)+'%';
+ $('calX').hidden=!c.active;$('calD').hidden=!!c.active;
+ $('calR').innerHTML=Object.entries(c.results||{}).map(([n,r])=>`<span class="pill ${r.ok?'ok':'bad'}"><i></i>${esc(n)}: ${r.ok?ms(r.latency_ms):esc(r.why)}</span>`).join('');
+}
+
+function addLog(lines){if(!lines.length)return;logSeq=lines[lines.length-1][0];
+ for(const id of ['log','calLog']){const b=$(id),stick=b.scrollTop+b.clientHeight>=b.scrollHeight-4;
+  b.textContent+=lines.map(l=>l[1]).join('\n')+'\n';
+  if(b.textContent.length>60000)b.textContent=b.textContent.slice(-40000);
+  if(stick)b.scrollTop=b.scrollHeight}}
+
+async function poll(){clearTimeout(timer);
+ try{const s=await (await fetch('/api/state')).json();
+  if(S&&!S.calibrating&&s.calibrating)$('calLog').textContent='';
+  render(s);
+  if(s.log_seq>logSeq)addLog(await (await fetch('/api/log?since='+logSeq)).json());
+ }catch(e){$('sum').textContent='SyncRoom is not responding — is it still running?'}
+ timer=setTimeout(poll,S&&S.calibrating?400:1500)}
+setInterval(()=>{if(S&&S.calibrating)renderCal(S)},250);
+
+// ---- setup dialog
+async function openSetup(){setupD.showModal();renderMine();
+ try{const d=await (await fetch('/api/devices')).json();
+  const opt=(v,t,cur)=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(t)}</option>`;
+  $('micSel').innerHTML=opt('','System default input',d.mic||'')+d.inputs.map(n=>opt(n,n,d.mic)).join('');
+  $('capSel').innerHTML=d.capture_mode?d.inputs.map(n=>opt(n,n,d.capture)).join(''):'<option>Spotify via librespot / file</option>';
+  $('capSel').disabled=!d.capture_mode;
+  $('capNote').textContent=d.capture_mode?'Where the music comes from (e.g. BlackHole 2ch). Saved for next time; a --capture flag on the command line wins.':
+   'Start SyncRoom with --capture "BlackHole 2ch" to choose an input here.';
+ }catch(e){toast('could not list audio devices')}}
+function setCap(v){api('/api/capture',{device:v})}
+function renderMine(){if(!S)return;
+ $('mine').innerHTML=S.speakers.length?S.speakers.map(o=>`<div class="off"><span><b>${esc(o.name)}</b> <span class="small mute">${kind(o)}</span></span>
+  <span class="nudge"><button class="sm" ${S.calibrating?'disabled':''} onclick='api("/api/speaker/enable",{name:${JSON.stringify(o.name)},on:${!o.enabled}})'>${o.enabled?'Turn off':'Turn on'}</button>
+  <button class="sm bad" ${S.calibrating?'disabled':''} onclick='rm(this,${JSON.stringify(o.name)})'>Remove</button></span></div>`).join(''):'<div class="small mute">None yet.</div>'}
+function rm(b,n){if(b.dataset.sure){api('/api/speaker/remove',{name:n});return}
+ b.dataset.sure=1;b.textContent='Really remove?';setTimeout(()=>{delete b.dataset.sure;b.textContent='Remove'},3000)}
+let FOUND=[];
+async function scan(){$('scanB').disabled=true;$('scanN').textContent='Scanning… (about 10 s)';
+ try{FOUND=await (await fetch('/api/discover')).json();
+  $('scanN').textContent=FOUND.length?`Found ${FOUND.length}.`:'Nothing found.';
+  $('found').innerHTML=FOUND.map((f,i)=>`<div class="off"><span><b>${esc(f.name)}</b> <span class="small mute">${esc(TYPE[f.type])}${f.ip?' · '+esc(f.ip):''}${f.model?' · '+esc(f.model):''}</span></span>
+   ${f.added?`<span class="small mute">added as ${esc(f.added)}</span>`:`<button class="sm p" onclick="add(${i},this)">Add</button>`}</div>`).join('');
+ }catch(e){$('scanN').textContent='Scan failed.'}
+ $('scanB').disabled=false}
+async function add(i,b){b.disabled=true;if(await api('/api/speaker/add',FOUND[i])){b.outerHTML='<span class="small mute">added</span>'}else b.disabled=false}
+poll();
+</script></body></html>

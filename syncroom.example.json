@@ -1,0 +1,11 @@
+{
+  "spotify_name": "SyncRoom",
+  "http_port": 8765,
+  "mic": null,
+  "outputs": [
+    {"name": "sonos",     "type": "sonos",      "ip": "192.168.1.40"},
+    {"name": "kitchen",   "type": "chromecast", "cast_name": "Kitchen speaker"},
+    {"name": "bedroom",   "type": "chromecast", "cast_name": "Bedroom speaker"},
+    {"name": "soundbar",  "type": "pulse",      "sink": "bluez_output.AA_BB_CC_DD_EE_FF.1"}
+  ]
+}

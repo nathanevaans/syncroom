@@ -1,0 +1,7 @@
+numpy
+scipy
+lameenc
+soco
+pychromecast
+sounddevice
+soxr
