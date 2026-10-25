@@ -1,5 +1,6 @@
 """Speaker outputs: HTTP stream (Sonos / Chromecast), PortAudio device, PulseAudio sink."""
 
+import contextlib
 import subprocess
 import threading
 import time
@@ -79,7 +80,7 @@ class Output:
     def start(self):
         pass
 
-    def stop(self):
+    def stop(self, wait=False):
         self.stopped = True
         self.kick.set()
 
@@ -125,7 +126,8 @@ class HttpOutput(Output):
             self._watching = True
             threading.Thread(target=self._watchdog, daemon=True).start()
 
-    def stop(self):
+    def stop(self, wait=False):
+        """wait: tell the speaker to stop before returning (on quit), not in the background."""
         super().stop()
         self.status = "off"
 
@@ -137,10 +139,18 @@ class HttpOutput(Output):
                     soco.SoCo(self.cfg["ip"]).stop()
                 elif self.type == "chromecast" and getattr(self, "cast", None) is not None:
                     self.cast.media_controller.stop()
+                    self.cast.disconnect(timeout=3)
             except Exception as e:  # noqa: BLE001
                 log(f"[{self.name}] couldn't tell it to stop: {e}")
+            browser = getattr(self, "browser", None)
+            if browser is not None:
+                with contextlib.suppress(Exception):
+                    browser.stop_discovery()
 
-        threading.Thread(target=_tell, daemon=True).start()
+        if wait:
+            _tell()
+        else:
+            threading.Thread(target=_tell, daemon=True).start()
 
     def _cast_idle(self):
         """True if a Chromecast reports it isn't playing our stream any more."""

@@ -1,39 +1,48 @@
-"""Command line entry point: `syncroom discover` / `syncroom run`."""
+"""Command line entry point: `syncroom menubar` / `syncroom run` / `syncroom discover`."""
 
 import argparse
 import json
-import shutil
-import sys
 
+from .config import CONFIG, default_config_path
 from .constants import SR
 from .discovery import discover
 from .hub import Hub
 from .source import CaptureProc
 
+DEFAULT_CAPTURE = "BlackHole 2ch"
+
 
 def main():
     ap = argparse.ArgumentParser(prog="syncroom", description="Synchronized multi-speaker Spotify")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("discover")
-    r = sub.add_parser("run")
-    r.add_argument("--config", default="syncroom.json")
+    sub.add_parser("discover", help="list speakers and audio devices")
+    m = sub.add_parser("menubar", help="run as a Mac menu-bar app")
+    r = sub.add_parser("run", help="run in this terminal, with the syncroom> console")
+    for p in (m, r):
+        p.add_argument("--config", help=f"config file (default {CONFIG})")
     r.add_argument("--file", help="play this audio file (looped) instead of Spotify, for testing")
     r.add_argument("--calibrate", action="store_true", help="calibrate on start-up")
-    r.add_argument("--librespot", default="librespot")
     r.add_argument(
         "--capture",
-        metavar="DEVICE",
-        help="capture this audio input instead of using librespot, e.g. 'BlackHole 2ch' "
-        "(play Spotify in the normal app with its output set to that device)",
+        metavar="INPUT",
+        help="the input the music comes from (default 'BlackHole 2ch': set the Mac's sound "
+        "output to it)",
     )
     a = ap.parse_args()
 
     if a.cmd == "discover":
         return discover()
+    cfg_path = a.config or default_config_path()
+    if a.cmd == "menubar":
+        from .menubar import run_menubar
 
-    with open(a.config) as f:
-        cfg = json.load(f)
-    capture = a.capture or cfg.get("capture")
+        return run_menubar(cfg_path)
+
+    try:
+        with open(cfg_path) as f:
+            cfg = json.load(f)
+    except FileNotFoundError:
+        cfg = {}
     if a.file:
         cmd = [
             "ffmpeg",
@@ -51,28 +60,6 @@ def main():
             str(SR),
             "-",
         ]
-    elif capture:
-        cmd = CaptureProc(capture)
     else:
-        if not shutil.which(a.librespot):
-            sys.exit(
-                "librespot not found. Install it: `cargo install librespot` "
-                "(or your package manager)."
-            )
-        cmd = [
-            a.librespot,
-            "--name",
-            cfg.get("spotify_name", "SyncRoom"),
-            "--backend",
-            "pipe",
-            "--format",
-            "S16",
-            "--bitrate",
-            "320",
-            "--device-type",
-            "speaker",
-            "--initial-volume",
-            "70",
-            *cfg.get("librespot_args", []),
-        ]
-    Hub(a.config, cmd, live=bool(capture) and not a.file).run(calibrate_first=a.calibrate)
+        cmd = CaptureProc(a.capture or cfg.get("capture") or DEFAULT_CAPTURE)
+    Hub(cfg_path, cmd, live=not a.file).run(calibrate_first=a.calibrate)

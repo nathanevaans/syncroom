@@ -11,6 +11,7 @@ dependencies = ["numpy", "scipy", "soxr", "lameenc", "soco", "pychromecast", "so
 
 [project.optional-dependencies]
 dev = ["ruff", "pytest"]
+app = ["rumps", "py2app"]
 
 [project.scripts]
 syncroom = "syncroom.cli:main"
@@ -27,6 +28,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "N", "B", "UP", "BLE", "SIM"]
+
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

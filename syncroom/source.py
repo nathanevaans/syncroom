@@ -1,6 +1,7 @@
-"""The master clock: a ring buffer fed by BlackHole capture, librespot or ffmpeg."""
+"""The master clock: a ring buffer fed by BlackHole capture (or ffmpeg for a test file)."""
 
 import collections
+import contextlib
 import os
 import subprocess
 import threading
@@ -13,7 +14,7 @@ from .logs import log
 
 
 class CaptureProc:
-    """Captures an input device (e.g. BlackHole) directly with CoreAudio/PortAudio, resampling to
+    """Captures an input device (BlackHole) directly with CoreAudio/PortAudio, resampling to
     44.1 kHz with soxr if needed. Quacks like the subprocess Source expects."""
 
     def __init__(self, device):
@@ -63,12 +64,12 @@ class CaptureProc:
 
 
 class Source:
-    """Master clock. Reads PCM from librespot/ffmpeg at exactly real time (that paces the decoder)
-    and pads silence when Spotify is paused, so every stream keeps flowing."""
+    """Master clock. Takes live capture (or ffmpeg PCM, paced at exactly real time) and pads
+    silence when Spotify is paused, so every stream keeps flowing."""
 
     def __init__(self, cmd, live=False):
         self.cmd = cmd
-        self.live = live  # True for real-time capture (BlackHole): never block it, trim backlog
+        self.live = live  # True for real-time capture: never block it, trim backlog
         self.buf = np.zeros((SR * BUF_SEC, CH), np.int16)
         self.n = 0
         self.t0 = time.monotonic()
@@ -76,6 +77,7 @@ class Source:
         self.muted = False
         self.pending = b""
         self.proc = None
+        self.running = False
 
     def _spawn(self):
         if isinstance(self.cmd, CaptureProc):
@@ -95,6 +97,7 @@ class Source:
     def start(self):
         self._spawn()
         self.t0 = time.monotonic()
+        self.running = True
         threading.Thread(target=self._run, daemon=True).start()
 
     def _raw(self):
@@ -108,8 +111,14 @@ class Source:
         """Monotonic time at which frame f is 'current' for readers."""
         return self.t0 + (f + LEAD) / SR
 
+    def stop(self):
+        self.running = False
+        if self.proc is not None:
+            with contextlib.suppress(Exception):
+                self.proc.terminate()
+
     def _run(self):
-        while True:
+        while self.running:
             if self.proc.poll() is not None:
                 log("source exited — restarting in 2 s")
                 time.sleep(2)

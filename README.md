@@ -1,30 +1,27 @@
 # SyncRoom
 
-Spotify → Sonos + Google Home/Nest + Bluetooth speakers (e.g. the Samsung soundbar), time-aligned by mic calibration.
+Plays the Spotify app on Sonos, Google Home / Nest and Bluetooth speakers at once, time-aligned by
+mic calibration. macOS 13+.
 
-Runs on one always-on machine on your Wi-Fi that has a mic and Bluetooth — a Linux box / Raspberry Pi 4–5 (with a USB mic) or a Mac.
-
-## Setup (Linux / Pi)
+## Install
 ```bash
-sudo apt install ffmpeg pulseaudio-utils libportaudio2 cargo   # PipeWire's pulse layer is fine
-cargo install librespot                                        # Spotify Connect receiver (needs Premium)
-pip install -r requirements.txt
-bluetoothctl                # pair + connect the soundbar: scan on / pair XX / trust XX / connect XX
-python syncroom.py discover # prints ready-to-paste config lines for every speaker found
-cp syncroom.example.json syncroom.json   # paste the discovered lines into "outputs"
-python syncroom.py run --calibrate
+macapp/build.sh        # makes .venv, installs everything, builds ~/Applications/SyncRoom.app
 ```
-On a Mac: `brew install librespot ffmpeg portaudio`, and use `{"type": "local", "device": "Samsung Soundbar"}` for Bluetooth speakers instead of `pulse`.
+Needs [BlackHole 2ch](https://existential.audio/blackhole/) (`brew install blackhole-2ch`): set
+System Settings → Sound → Output to **BlackHole 2ch** (~80–90%) and Spotify's volume to 100%.
+Open **SyncRoom** (Spotlight). A speaker icon appears in the menu bar; it starts, finds your
+speakers and plays whatever the Mac plays. Allow the microphone when asked (for calibration).
 
-Then in Spotify pick **SyncRoom** as the device, and open `http://<that-machine>:8765` for the control page.
+New Bluetooth speakers connected to the Mac are used straight away; new Sonos / Google Home
+speakers are added switched off (they might be someone else's) — tick them under **Speakers**.
+Then **Calibrate all speakers…** with the Mac where you listen.
 
-## Calibration
-Put the machine's mic where you usually sit, keep the room quiet, press **Calibrate all** (≈10 s per Wi-Fi speaker, 4 s per Bluetooth one). Music mutes, each speaker plays four chirps, the hub finds when they arrive and delays every other speaker to match the slowest. Then press **Sync test** — you should hear one click per beat, not a flam. Fine-tune with the ±10 ms trims.
+Terminal instead: `.venv/bin/python -m syncroom run [--calibrate]` (console + control page at
+`http://<mac>:8765`). Config lives in `~/Library/Application Support/SyncRoom/syncroom.json`,
+log in `~/Library/Logs/SyncRoom.log`.
 
 ## Things to know
-- **Recalibrate after restarting** or after a speaker reconnects: Sonos/Google Home pick a new buffer size each time they connect.
-- **Drift:** each speaker's crystal runs a few tens of ppm off, so Wi-Fi speakers can creep a few ms per minute. Over a long session press Calibrate again (or nudge trims).
-- The Google Homes must be added **individually**, not as a Google speaker group.
-- If the Sonos is grouped, ungroup it in the Sonos app first.
-- Total delay from pressing play to sound ≈ the slowest speaker (~2–3 s) — fine for music, not for TV lip-sync.
-- Open TCP port 8765 on the host's firewall so the speakers can pull the stream.
+- Recalibrate after a speaker reconnects: Sonos / Google Home pick a new buffer each time.
+- Wi-Fi speakers drift a few ms per minute; recalibrate or nudge trims on long sessions.
+- Add Google Homes individually, not as a group; ungroup the Sonos.
+- Everything waits for the slowest speaker (~15 s for Google Home) — fine for music, not for TV.

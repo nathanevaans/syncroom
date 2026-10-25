@@ -237,10 +237,10 @@ async function openSetup(){setupD.showModal();renderMine();
  try{const d=await (await fetch('/api/devices')).json();
   const opt=(v,t,cur)=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(t)}</option>`;
   $('micSel').innerHTML=opt('','System default input',d.mic||'')+d.inputs.map(n=>opt(n,n,d.mic)).join('');
-  $('capSel').innerHTML=d.capture_mode?d.inputs.map(n=>opt(n,n,d.capture)).join(''):'<option>Spotify via librespot / file</option>';
+  $('capSel').innerHTML=d.capture_mode?d.inputs.map(n=>opt(n,n,d.capture)).join(''):'<option>Test file</option>';
   $('capSel').disabled=!d.capture_mode;
-  $('capNote').textContent=d.capture_mode?'Where the music comes from (e.g. BlackHole 2ch). Saved for next time; a --capture flag on the command line wins.':
-   'Start SyncRoom with --capture "BlackHole 2ch" to choose an input here.';
+  $('capNote').textContent=d.capture_mode?'Where the music comes from (BlackHole 2ch, with the Mac\'s sound output set to it). Saved for next time; a --capture flag on the command line wins.':
+   'Playing a test file (--file), so there is no input to choose.';
  }catch(e){toast('could not list audio devices')}}
 function setCap(v){api('/api/capture',{device:v})}
 function renderMine(){if(!S)return;

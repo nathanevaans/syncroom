@@ -13,6 +13,7 @@ import numpy as np
 
 from . import discovery
 from .calibration import CalibrationMixin
+from .config import OBSOLETE_KEYS
 from .console import run_console
 from .constants import CH, DEFAULT_LAT, SR
 from .dsp import make_chirp
@@ -22,15 +23,24 @@ from .outputs import make_output
 from .source import CaptureProc, Source
 from .web import make_handler
 
+# the config field that identifies each kind of speaker
+SPEAKER_KEY = {"sonos": "ip", "chromecast": "cast_name", "local": "device", "http": None}
+
 
 class Hub(CalibrationMixin):
     def __init__(self, cfg_path, src_cmd, live=False):
         self.cfg_path = cfg_path
-        with open(cfg_path) as f:
-            self.cfg = json.load(f)
+        try:
+            with open(cfg_path) as f:
+                self.cfg = json.load(f)
+        except FileNotFoundError:
+            self.cfg = {}
         for k in ("latency", "trim_ms", "gain", "measured_at"):
             self.cfg.setdefault(k, {})
         self.cfg.setdefault("outputs", [])
+        self.cfg.setdefault("ignored", [])  # speakers removed by hand: auto-setup leaves them out
+        for k in OBSOLETE_KEYS:
+            self.cfg.pop(k, None)
         self.port = self.cfg.get("http_port", 8765)
         self.host = self.cfg.get("host_ip") or lan_ip()
         self.src = Source(src_cmd, live=live)
@@ -42,6 +52,7 @@ class Hub(CalibrationMixin):
         self.cal = {}  # live calibration progress for the control page
         self.last_cal = {}
         self.slock = threading.Lock()  # speaker add/remove/on/off
+        self.srv = None
 
     # ---- timing model
     def latency(self, name):
@@ -99,11 +110,10 @@ class Hub(CalibrationMixin):
             self.save()
 
     def add_speaker(self, spec):
-        keys = {"sonos": "ip", "chromecast": "cast_name", "local": "device", "http": None}
         t = spec.get("type")
-        if t not in keys:
+        if t not in SPEAKER_KEY:
             raise ValueError(f"unknown speaker type {t!r}")
-        k = keys[t]
+        k = SPEAKER_KEY[t]
         if k and not spec.get(k):
             raise ValueError(f"{t} speaker needs '{k}'")
         with self.slock:
@@ -122,6 +132,10 @@ class Hub(CalibrationMixin):
             c = {"name": name, "type": t}
             if k:
                 c[k] = spec[k]
+            if spec.get("uid"):
+                c["uid"] = spec["uid"]  # Sonos: lets auto-setup follow it to a new IP
+            if spec.get("enabled") is False:
+                c["enabled"] = False
             self.cfg["outputs"].append(c)
             self._sync_outputs()
             self.save()
@@ -130,12 +144,64 @@ class Hub(CalibrationMixin):
 
     def remove_speaker(self, name):
         with self.slock:
+            c = self.out_cfg(name)
+            if c is not None:
+                self.cfg["ignored"] = sorted(set(self.cfg["ignored"]) | self._idents(c))
             self.cfg["outputs"] = [c for c in self.cfg["outputs"] if c["name"] != name]
             for k in ("latency", "trim_ms", "gain", "measured_at"):
                 self.cfg[k].pop(name, None)
             self._sync_outputs()
             self.save()
         log(f"[{name}] removed")
+
+    @staticmethod
+    def _idents(c):
+        """Ways of recognising a speaker in a scan, e.g. {"chromecast:Kitchen speaker"}."""
+        t, k = c["type"], SPEAKER_KEY.get(c["type"])
+        return {f"{t}:{c[f]}" for f in (k, "uid") if f and c.get(f)}
+
+    def auto_setup(self):
+        """Find every speaker and fold it into the config: follow a Sonos whose IP changed, add
+        Bluetooth speakers connected to this Mac (switched on), and add new Sonos / Google Home
+        speakers switched *off* — they may be someone else's — except ones removed by hand
+        before. Returns the names added."""
+        found = discovery.scan_network() + discovery.bluetooth_speakers()
+        added = []
+        for f in found:
+            if self.calibrating:
+                break
+            t = f["type"]
+            with self.slock:
+                known = [c for c in self.cfg["outputs"] if c["type"] == t]
+                if t == "sonos":
+                    c = next(
+                        (c for c in known if c.get("uid") == f["uid"] or c.get("ip") == f["ip"]),
+                        None,
+                    )
+                    if c is not None:
+                        old = c["ip"]
+                        if (c.get("uid"), old) != (f["uid"], f["ip"]):
+                            c["uid"], c["ip"] = f["uid"], f["ip"]
+                            self.save()
+                        if old != f["ip"] and c["name"] in self.outputs:
+                            log(f"[{c['name']}] Sonos moved from {old} to {f['ip']}")
+                            self.outputs[c["name"]].start()
+                        continue
+                elif any(c.get(SPEAKER_KEY[t]) == f[SPEAKER_KEY[t]] for c in known):
+                    continue
+                if self._idents(f) & set(self.cfg["ignored"]):
+                    continue
+            if t != "local":
+                f["enabled"] = False
+            try:
+                added.append(self.add_speaker(f))
+            except ValueError as e:
+                log(f"auto-setup: couldn't add {f.get('name')}: {e}")
+        log(
+            f"auto-setup: {len(found)} speakers found"
+            + (f", added {', '.join(added)}" if added else ", nothing new")
+        )
+        return added
 
     def reconnect(self, name):
         o = self.outputs[name]
@@ -151,8 +217,9 @@ class Hub(CalibrationMixin):
         except Exception as e:  # noqa: BLE001
             return {"error": str(e), "inputs": [], "outputs": []}
         cur = self.src.cmd
+        inputs = sorted({d["name"] for d in devs if d["max_input_channels"] > 0})
         return {
-            "inputs": sorted({d["name"] for d in devs if d["max_input_channels"] > 0}),
+            "inputs": inputs,
             "outputs": sorted({d["name"] for d in devs if d["max_output_channels"] > 0}),
             "mic": self.cfg.get("mic"),
             "capture": cur.device if isinstance(cur, CaptureProc) else None,
@@ -165,11 +232,9 @@ class Hub(CalibrationMixin):
         log(f"calibration microphone: {dev or 'system default'}")
 
     def set_capture(self, dev):
-        """Swap the music input (e.g. BlackHole) without restarting."""
+        """Swap the music input (BlackHole) without restarting."""
         if not isinstance(self.src.cmd, CaptureProc):
-            raise ValueError(
-                "SyncRoom wasn't started with --capture, so there's no input to switch"
-            )
+            raise ValueError("SyncRoom is playing a test file, so there's no input to switch")
         old = self.src.proc
         new = CaptureProc(dev)
         self.src.cmd = self.src.proc = new
@@ -185,13 +250,13 @@ class Hub(CalibrationMixin):
         for d in self.devices()["outputs"]:
             if d not in skip:
                 found.append({"type": "local", "name": d, "device": d})
-        keys = {"sonos": "ip", "chromecast": "cast_name", "local": "device"}
         for f in found:
+            k = SPEAKER_KEY[f["type"]]
             f["added"] = next(
                 (
                     c["name"]
                     for c in self.cfg["outputs"]
-                    if c["type"] == f["type"] and c.get(keys[f["type"]]) == f[keys[f["type"]]]
+                    if c["type"] == f["type"] and c.get(k) == f[k]
                 ),
                 None,
             )
@@ -283,17 +348,44 @@ class Hub(CalibrationMixin):
             "speakers": speakers,
             "log_seq": LOG[-1][0] if LOG else 0,
             "mic": self.cfg.get("mic"),
+            "capture": getattr(self.src.cmd, "device", None),
         }
 
-    def run(self, calibrate_first=False):
+    @property
+    def url(self):
+        return f"http://{self.host}:{self.port}/"
+
+    def start(self):
+        """Start the music capture, the control page and every speaker."""
         self.src.start()
-        srv = ThreadingHTTPServer(("0.0.0.0", self.port), make_handler(self))
-        srv.daemon_threads = True
-        threading.Thread(target=srv.serve_forever, daemon=True).start()
-        log(f"control page: http://{self.host}:{self.port}/")
+        self.srv = ThreadingHTTPServer(("0.0.0.0", self.port), make_handler(self))
+        self.srv.daemon_threads = True
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        log(f"control page: {self.url}")
         time.sleep(0.5)
         for o in self.outputs.values():
             o.start()
+
+    def stop(self):
+        """Hand the speakers back (Sonos / Google Home are told to stop) and release everything."""
+        self.cal_cancel = True
+        ts = [
+            threading.Thread(target=o.stop, kwargs={"wait": True}, daemon=True)
+            for o in self.outputs.values()
+        ]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join(8)
+        self.src.stop()
+        if self.srv is not None:
+            self.srv.shutdown()
+            self.srv.server_close()
+            self.srv = None
+        log("stopped")
+
+    def run(self, calibrate_first=False):
+        self.start()
         if calibrate_first:
             net = [o for o in self.outputs.values() if o.type in ("sonos", "chromecast")]
             deadline = time.monotonic() + 30
@@ -325,7 +417,7 @@ class Hub(CalibrationMixin):
             while True:
                 time.sleep(3600)
         except (KeyboardInterrupt, EOFError):
-            log("bye")
             with contextlib.suppress(Exception):
-                self.src.proc.terminate()
+                self.stop()
+            log("bye")
             os._exit(0)

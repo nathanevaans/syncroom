@@ -9,17 +9,16 @@ Owner: Nathan. Runs on his MacBook (macOS, Python 3.12).
 `calibration.py` (CalibrationMixin on Hub) · `outputs.py` (Http/Local/Pulse outputs) ·
 `source.py` (ring buffer + BlackHole capture) · `dsp.py` (chirp + matched filter) ·
 `web.py` (HTTP API + streams) · `static/index.html` (control page) · `console.py` ·
-`discovery.py` · `logs.py` · `net.py` · `constants.py`. `syncroom.py` at the top is only a launcher.
+`discovery.py` · `menubar.py` · `config.py` · `logs.py` · `net.py` · `constants.py`. `syncroom.py` at the top is only a launcher.
 Check before finishing: `ruff check . && ruff format --check . && pytest` (tests in `tests/`).
 
 ## How Nathan runs it
-```bash
-python3 syncroom.py run --capture "BlackHole 2ch"              # use saved latencies (= python3 -m syncroom ...)
-python3 syncroom.py run --calibrate --capture "BlackHole 2ch"  # measure first
-python3 syncroom.py discover                                   # list speakers
-```
-Mac setup: System Settings → Sound → Output = BlackHole 2ch (~80–90% volume), Spotify volume 100%,
-soundbar paired over Bluetooth, its own volume maxed in Audio MIDI Setup.
+Menu-bar app: `macapp/build.sh` → `~/Applications/SyncRoom.app` (py2app *alias* build: runs this
+folder's code via `.venv`, so code edits need no rebuild; rebuild only for plist changes — the
+ad-hoc signature changes, so macOS may re-ask for permissions). Terminal:
+`.venv/bin/python -m syncroom run [--calibrate]` (input defaults to BlackHole 2ch), `... discover`.
+Config `~/Library/Application Support/SyncRoom/syncroom.json` (seeded once from the project's
+`syncroom.json`), log `~/Library/Logs/SyncRoom.log`. Mac sound output = BlackHole 2ch (~80–90%), Spotify volume 100%.
 Control page: `http://<mac-ip>:8765`. Console at the `syncroom>` prompt (type anything for help).
 
 ## Architecture
@@ -42,7 +41,7 @@ Control page: `http://<mac-ip>:8765`. Console at the `syncroom>` prompt (type an
   Accept only if every chirp individually ≥ 4× median envelope ("snr"). Listening window per type:
   MAX_LAT = sonos 12 s, chromecast 20 s, local 1.5 s; override per output with `"max_latency_s"`.
   Interactive prompts per speaker (Enter / s skip / r retry). Constant mic latency cancels out.
-- **Config** `syncroom.json` (auto-saved): outputs list, `latency` (seconds), `trim_ms`, `gain`, `mic`,
+- **Config** (auto-saved, path above): outputs list, `ignored` (removed by hand), Sonos `uid`, `start_on_open`, `latency` (seconds), `trim_ms`, `gain`, `mic`,
   optional `enabled: false`, `max_latency_s`, `capture`.
 - **Control**: web page is the main UI (no config editing needed). Per speaker: measured latency (+ when / snr),
   suggested added delay (`global_delay − latency`), live added delay (editable; = suggested + trim, ±1/10/50 nudges,
@@ -54,13 +53,33 @@ Control page: `http://<mac-ip>:8765`. Console at the `syncroom>` prompt (type an
   Console: `c [name]`, `t [name]`, `s` (status + send levels + capture overflows), `lat <name> <ms>`,
   `delay <name> <ms>`, `+10/-10 <name>`, `r <name>`, `off <name>`, `rec` (10 s WAV of captured audio), `q`.
 
-## Nathan's speakers (current config)
-sonos-bedroom (192.168.1.75, ~3.8 s latency), kitchen-speaker (Google Home Mini, 192.168.1.71, ~12–15 s),
-danny-bedroom-speaker (Google Home, may be disabled), soundbar (BT "[ AV ] T400", ~0.2 s). Mac IP 192.168.1.17.
+## Nathan's speakers (syncroom.json as of 2026-10-25)
+sonos-bedroom (192.168.1.75, ~3.8 s latency), kitchen-speaker (Google Home Mini "Kitchen speaker", ~15.8 s),
+soundbar (BT "[ AV ] T400", ~0.22 s), chaz (BT "JBL Flip 5", ~0.25 s). Mac IP 192.168.1.17.
+Mac audio output is currently BlackHole 2ch. Spotify desktop app is the music source.
+
+## Repo
+GitHub: `git@github.com:nathanevaans/syncroom.git` (branch `main`). `.gitignore` keeps out
+`librespot-cache/` (Spotify credentials — never read or commit) and `syncroom.json` (personal config).
+Dev tools (ruff, pytest) aren't installed globally: use a throwaway venv
+(`python3 -m venv --system-site-packages <scratch>/venv && <scratch>/venv/bin/pip install ruff pytest`).
+
+## Menu-bar app (`menubar.py`, built 2026-10-25)
+rumps. Start → `Hub.start()` then `Hub.auto_setup()`: follows a Sonos to a new IP (by `uid`), adds
+connected BT speakers (system_profiler, minorType Speaker) switched on, new Sonos/Google Homes
+switched OFF (housemate "Danny Bedroom speaker" is on the LAN!), never re-adds `ignored` ones.
+Menu: status, warning (permission / uncalibrated), Start/Stop, Speakers (toggle), Music input,
+Calibrate (no prompts), Test beep, control page, start-on-open, open at login (LaunchAgent
+`local.syncroom`), log, Quit (tells speakers to stop). Tested by driving it from a script with no
+speakers; not yet used by Nathan on the real speakers.
 
 ## History / lessons (don't regress)
-- **librespot is abandoned**: Spotify refuses audio keys for Nathan's account (`error audio key 0 1`,
-  librespot issues #1649/#1735, unfixed). Hence BlackHole capture. Code path still exists without `--capture`.
+- **BlackHole only — Nathan doesn't want ScreenCaptureKit** (tried and removed 2026-10-25; it also
+  broke on a second Start: PyObjC classes defined in `__init__` can't be registered twice).
+- The .app has an ASCII locale: open files / subprocess text with `encoding="utf-8"`, call tools by
+  absolute path (`/usr/sbin/system_profiler`). `log()` swallows print errors so it can't kill threads.
+- **librespot is removed** (2026-10-25): Spotify refuses audio keys for Nathan's account (`error audio key 0 1`,
+  librespot issues #1649/#1735). Don't bring it back. `librespot-cache/` holds old credentials (never read).
 - Chromecast: keep the pychromecast browser alive (stopping discovery before `cast.wait()` broke connecting).
 - Overlay pruning must use the output's own delayed timeline (`now − offset − 10 s`). Using `now` deleted
   chirps when offsets exceeded ~10 s (bug fixed 2026-10-25).
@@ -73,4 +92,5 @@ danny-bedroom-speaker (Google Home, may be disabled), soundbar (BT "[ AV ] T400"
 - Wi-Fi speakers drift a few ms/min vs the Mac clock; no automatic correction yet (recalibrate or trim).
   Possible improvement: periodic silent re-measure, or adaptive resampling per output.
 - Everything is delayed to the slowest speaker (Google Homes, 12–15 s) → long lag on play/skip.
-- Tested in a sandbox only (no real speakers); verify on hardware.
+- New control page / speaker management / package refactor tested in a sandbox only (fake HTTP
+  speakers, 11 pytest tests); verify on hardware.
